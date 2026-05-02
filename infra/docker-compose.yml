@@ -1,36 +1,42 @@
-version: "3.9"
-
 services:
   postgres:
-    image: postgres:16
-    container_name: trademirror-postgres
+    image: postgres:16-alpine
     environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: trademirror
-      POSTGRES_USER: trademirror
-      POSTGRES_PASSWORD: trademirror
     ports:
       - "5432:5432"
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
 
   redis:
-    image: redis:7
-    container_name: trademirror-redis
+    image: redis:7-alpine
     ports:
       - "6379:6379"
 
   api:
     build:
       context: ../services/api
-    container_name: trademirror-api
-    environment:
-      DATABASE_URL: postgresql://trademirror:trademirror@postgres:5432/trademirror
-      REDIS_URL: redis://redis:6379/0
+      dockerfile: Dockerfile
+    env_file:
+      - ../services/api/.env.example
     ports:
       - "8000:8000"
     depends_on:
       - postgres
       - redis
 
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+    env_file:
+      - ../apps/web/.env.example
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
 volumes:
-  pg_data:
+  postgres_data:
