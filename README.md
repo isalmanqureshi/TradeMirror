@@ -13,7 +13,7 @@ TradeMirror is a RAG chatbot platform for analyzing a user's trading history, ba
 
 - Docker + Docker Compose
 - Node.js 20+
-- pnpm 9+ (or npm)
+- npm 10+ (or pnpm 9+)
 - Python 3.11+
 
 ## Quick Start
@@ -46,8 +46,8 @@ Frontend:
 
 ```bash
 cd apps/web
-pnpm install
-pnpm dev
+npm ci
+npm run dev
 ```
 
 Backend:
@@ -56,7 +56,7 @@ Backend:
 cd services/api
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -71,3 +71,24 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs:
 
 - Trading analytics logic is intentionally not implemented yet.
 - This setup is a clean foundation for iterative RAG and analytics development.
+
+
+### 4) Run local checks from a clean checkout
+
+Backend tests:
+
+```bash
+cd services/api
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pytest -q
+```
+
+Frontend lint:
+
+```bash
+cd apps/web
+npm ci
+npm run lint
+```
