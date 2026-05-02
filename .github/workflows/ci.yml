@@ -15,8 +15,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements-dev.txt
-      - run: pytest
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements.txt
+      - run: pytest -q
 
   frontend-lint:
     runs-on: ubuntu-latest
@@ -28,5 +29,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      # NOTE: package-lock.json is not committed yet. Keep npm install temporarily.
       - run: npm install
       - run: npm run lint
