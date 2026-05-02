@@ -8,19 +8,13 @@ const config: Config = {
     "./lib/**/*.{ts,tsx}"
   ],
   theme: {
-    extend: {
-      colors: {
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        card: "hsl(var(--card))",
-        "card-foreground": "hsl(var(--card-foreground))",
-        border: "hsl(var(--border))",
-        primary: "hsl(var(--primary))",
-        "primary-foreground": "hsl(var(--primary-foreground))"
-      }
-    }
+    container: {
+      center: true,
+      padding: "2rem"
+    },
+    extend: {}
   },
-  plugins: []
+  plugins: [require("tailwindcss-animate")]
 };
 
 export default config;
