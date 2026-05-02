@@ -1,25 +1,25 @@
-# AGENTS.md
+# TradeMirror Agent Rules
 
-## Project
-TradeMirror is a RAG chatbot for trading performance analytics.
+## General
+- Keep code production-oriented, typed, and modular.
+- Prefer explicit configuration over magic defaults.
+- Keep business logic separated by domain boundaries.
 
-## Rules
-- Do not provide financial advice.
-- Do not implement buy/sell recommendations.
-- Prefer typed interfaces and tests.
-- All analytics must expose sample size.
-- All chatbot answers must be grounded in retrieved data or computed metrics.
-- Use clear error handling for missing market data.
-- Keep backend business logic in services/api/app/services.
-- Keep analytics logic in services/api/app/analytics.
-- Keep frontend API clients in apps/web/lib/api.
-- Add or update tests for every feature.
+## Scope & Boundaries
+- Do not implement trading analytics/business alpha logic until explicitly requested.
+- Prioritize secure defaults for API and infrastructure changes.
 
-## Local commands
-- docker compose up
-- cd services/api && pytest
-- cd apps/web && npm run test
-- cd apps/web && npm run lint
+## Backend (`services/api`)
+- Use FastAPI + Pydantic models for API contracts.
+- Use SQLAlchemy for DB models/session management.
+- Keep routers under `app/api` and app wiring in `app/main.py`.
+- Write tests for added endpoints.
 
-## Acceptance
-A task is not complete unless tests pass and README/docs are updated when behavior changes.
+## Frontend (`apps/web`)
+- Use TypeScript strict mode.
+- Keep UI components small and composable.
+- Use Tailwind utility classes with readable grouping.
+
+## Infra/CI
+- Keep Docker images lean and reproducible.
+- CI should remain fast and deterministic.

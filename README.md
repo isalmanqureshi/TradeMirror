@@ -1,41 +1,34 @@
 # TradeMirror Monorepo
 
-TradeMirror is a monorepo containing:
+TradeMirror is a RAG chatbot platform for analyzing a user's trading history, backtests, journals, and market context.
 
-- `apps/web`: Next.js (TypeScript) frontend with Tailwind CSS and shadcn/ui-style components.
-- `services/api`: FastAPI backend service.
-- `packages/shared`: Shared schemas/types for cross-service contracts.
-- `infra`: Local infrastructure definitions (Docker Compose).
-- `docs`: Architecture and onboarding documentation.
+## Monorepo Structure
+
+- `apps/web` – Next.js frontend (TypeScript, Tailwind CSS, shadcn/ui-ready)
+- `services/api` – FastAPI backend (SQLAlchemy, Alembic, Pydantic)
+- `infra` – Local infrastructure and orchestration (`docker-compose.yml`)
+- `docs` – Product and architecture documentation
 
 ## Prerequisites
 
-- Node.js 20+
-- npm 10+
-- Python 3.11+
 - Docker + Docker Compose
+- Node.js 20+
+- pnpm 9+ (or npm)
+- Python 3.11+
 
-## Local Development
+## Quick Start
 
-### 1) Install web dependencies
+### 1) Configure environment variables
 
-```bash
-cd apps/web
-npm install
-```
-
-### 2) Install API dependencies
+Copy env examples:
 
 ```bash
-cd services/api
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+cp .env.example .env
+cp apps/web/.env.example apps/web/.env.local
+cp services/api/.env.example services/api/.env
 ```
 
-### 3) Start infrastructure and API with Docker Compose
-
-From repository root:
+### 2) Run with Docker Compose
 
 ```bash
 docker compose -f infra/docker-compose.yml up --build
@@ -43,28 +36,38 @@ docker compose -f infra/docker-compose.yml up --build
 
 Services:
 
+- Web: `http://localhost:3000`
 - API: `http://localhost:8000`
 - API health: `http://localhost:8000/health`
-- Postgres: `localhost:5432`
-- Redis: `localhost:6379`
 
-### 4) Run web app locally
+### 3) Run components locally (optional)
 
-In a new terminal:
+Frontend:
 
 ```bash
 cd apps/web
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-Open `http://localhost:3000`.
+Backend:
 
-## Health Checks
+```bash
+cd services/api
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+uvicorn app.main:app --reload --port 8000
+```
 
-- Web health route: `GET /api/health` (Next.js route handler)
-- API health route: `GET /health` (FastAPI)
+## CI
+
+GitHub Actions workflow at `.github/workflows/ci.yml` runs:
+
+- Frontend lint
+- Backend tests
 
 ## Notes
 
-- This scaffold intentionally contains no business logic yet.
-- Shared contracts should be added under `packages/shared` and consumed by both frontend and backend.
+- Trading analytics logic is intentionally not implemented yet.
+- This setup is a clean foundation for iterative RAG and analytics development.

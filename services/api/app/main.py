@@ -1,13 +1,7 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="TradeMirror API", version="0.1.0")
+from app.api.router import api_router
+from app.core.config import settings
 
-
-@app.get("/")
-def root() -> dict[str, str]:
-    return {"message": "TradeMirror API is running"}
-
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "api"}
+app = FastAPI(title=settings.app_name)
+app.include_router(api_router)
