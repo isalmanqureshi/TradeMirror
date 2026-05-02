@@ -67,6 +67,12 @@ GitHub Actions workflow at `.github/workflows/ci.yml` runs:
 - Frontend lint
 - Backend tests
 
+## CI and dependency-installation behavior
+
+- CI installs dependencies before running checks (`pip install -r services/api/requirements.txt` before `cd services/api && pytest -q`, and Node package installation before `npm run lint`).
+- Running `pytest` or `npm run lint` without first installing dependencies is expected to fail from a clean checkout.
+- In restricted environments (including some Codex sandboxes), package registry access can fail with HTTP 403 during `pip install`/`npm install`/`npm ci`; treat this as an environment limitation rather than an application-code failure.
+
 ## Notes
 
 - Trading analytics logic is intentionally not implemented yet.
