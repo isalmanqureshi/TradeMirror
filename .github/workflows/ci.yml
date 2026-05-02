@@ -7,26 +7,29 @@ on:
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: services/api
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt
-      - run: pytest -q
+      - name: Install backend dependencies
+        run: pip install -r services/api/requirements.txt
+      - name: Run backend tests
+        run: cd services/api && pytest -q
 
   frontend-lint:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: npm install
-      - run: npm run lint
+      - name: Install frontend dependencies
+        run: |
+          if [ -f apps/web/package-lock.json ]; then
+            cd apps/web && npm ci
+          else
+            cd apps/web && npm install
+          fi
+      - name: Run frontend lint
+        run: cd apps/web && npm run lint
