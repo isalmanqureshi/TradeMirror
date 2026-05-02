@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: trademirror-postgres
+    environment:
+      POSTGRES_DB: trademirror
+      POSTGRES_USER: trademirror
+      POSTGRES_PASSWORD: trademirror
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: trademirror-redis
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ../services/api
+    container_name: trademirror-api
+    environment:
+      DATABASE_URL: postgresql://trademirror:trademirror@postgres:5432/trademirror
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+
+volumes:
+  pg_data:
