@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr
@@ -40,13 +41,24 @@ class StrategyRead(ORMBase, StrategyCreate):
     updated_at: datetime
 
 
+class SourceType(str, Enum):
+    backtest = "backtest"
+    live = "live"
+    paper = "paper"
+
+
+class TradeSide(str, Enum):
+    long = "long"
+    short = "short"
+
+
 class TradeCreate(BaseModel):
     user_id: uuid.UUID
     strategy_id: uuid.UUID | None = None
-    source_type: str
+    source_type: SourceType
     instrument: str
     symbol: str
-    side: str
+    side: TradeSide
     entry_time: datetime
     exit_time: datetime | None = None
     entry_price: Decimal

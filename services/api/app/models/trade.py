@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,6 +17,7 @@ class Trade(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint("source_type IN ('backtest', 'live', 'paper')", name="ck_trades_source_type"),
         CheckConstraint("side IN ('long', 'short')", name="ck_trades_side"),
         Index("ix_trades_user_strategy_entry_time", "user_id", "strategy_id", "entry_time"),
+        UniqueConstraint("user_id", "strategy_id", "symbol", "side", "entry_time", name="uq_trades_dedupe"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True, nullable=False)
