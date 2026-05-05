@@ -30,6 +30,13 @@ class RowError:
     error: str
 
 
+class RowValidationError(ValueError):
+    def __init__(self, code: str, field: str | None, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.field = field
+
+
 @dataclass
 class ParsedTradeRow:
     row_number: int
@@ -65,9 +72,9 @@ def _parse_datetime(value: str | None, field: str) -> datetime | None:
     try:
         parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
     except ValueError as exc:
-        raise ValueError(f"invalid datetime for {field}") from exc
+        raise RowValidationError("invalid_datetime", field, f"invalid datetime for {field}") from exc
     if parsed.tzinfo is None:
-        raise ValueError(f"naive datetime is not allowed for {field}")
+        raise RowValidationError("naive_datetime_not_allowed", field, f"naive datetime is not allowed for {field}")
     return parsed.astimezone(timezone.utc)
 
 
@@ -146,9 +153,11 @@ def ingest_trade_csv(file: UploadFile, db: Session, user_id: uuid.UUID, strategy
             numeric_values = {field: _parse_decimal(row.get(field), field) for field in NUMERIC_FIELDS}
             numeric_values["entry_price"] = entry_price
             parsed_rows.append(ParsedTradeRow(row_number, symbol, side, entry_time, exit_time, _infer_instrument(symbol), numeric_values, row.get("order_type") or None, row.get("session_label") or None, setup_tags, (row.get("journal_note") or "").strip() or None))
+        except RowValidationError as exc:
+            errors.append(RowError(row_number, exc.code, exc.field, str(exc)))
         except ValueError as exc:
             msg = str(exc)
-            code = "invalid_datetime" if "datetime" in msg else "invalid_numeric" if "numeric" in msg else "naive_datetime_not_allowed" if "naive datetime" in msg else "invalid_row"
+            code = "invalid_numeric" if "numeric" in msg else "invalid_row"
             field = "entry_time" if "entry_time" in msg else "exit_time" if "exit_time" in msg else None
             errors.append(RowError(row_number, code, field, msg))
 
