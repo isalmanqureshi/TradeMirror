@@ -1,95 +1,19 @@
-# Trade CSV Ingestion
+# Data Ingestion
 
-## Endpoint
+## Datetime Policy
+- `entry_time` and `exit_time` must be ISO-8601 timezone-aware datetimes.
+- Datetimes with timezone offsets are normalized to UTC before dedupe and persistence.
+- Naive datetimes are rejected with `naive_datetime_not_allowed`.
 
-`POST /uploads/trades`
+## Upload Guardrails
+- Maximum upload size: 5 MB (`file_too_large`).
+- Maximum row count: 10,000 (`too_many_rows`).
 
-- Content type: `multipart/form-data`
-- Fields:
-  - `file` (required): CSV file
-  - `strategy_name` (required): strategy name used to resolve/create strategy for user
-  - `source_type` (required): `backtest` | `live` | `paper`
+## Duplicate Definition
+A duplicate trade is any row with the same `(user_id, strategy_id, symbol, side, entry_time)` as an existing trade (or prior row in the same upload after UTC normalization).
 
-## Supported CSV Columns
+## Structured Row Errors
+Each row-level error uses: 
+`{ row_number, code, field, error }`
 
-Required columns:
-- `symbol`
-- `side`
-- `entry_time`
-- `entry_price`
-
-Optional columns:
-- `exit_time`
-- `exit_price`
-- `quantity`
-- `pnl`
-- `r_multiple`
-- `fees`
-- `slippage`
-- `planned_risk`
-- `actual_risk`
-- `order_type`
-- `session_label`
-- `setup_tags`
-- `journal_note`
-
-Column normalization:
-- lowercases names
-- trims spaces
-- alias mapping:
-  - `entry price` / `EntryPrice` -> `entry_price`
-  - `P&L` -> `pnl`
-
-## Validation Rules
-
-Per-row validation:
-- `symbol` is required
-- `side` must be `long` or `short`
-- `entry_time` must parse as datetime
-- `entry_price` must parse as numeric
-- if `exit_time` exists, it must be `>= entry_time`
-- optional numeric columns must parse as numeric
-
-Invalid rows are collected into the error list and ingestion continues.
-
-## Example Request
-
-```bash
-curl -X POST http://localhost:8000/uploads/trades \
-  -F "file=@trades.csv" \
-  -F "strategy_name=Breakout" \
-  -F "source_type=live"
-```
-
-## Example Success Response
-
-```json
-{
-  "summary": {
-    "total_rows": 2,
-    "inserted": 2,
-    "skipped": 0,
-    "errors": 0
-  },
-  "errors": []
-}
-```
-
-## Example Partial Success Response
-
-```json
-{
-  "summary": {
-    "total_rows": 2,
-    "inserted": 1,
-    "skipped": 0,
-    "errors": 1
-  },
-  "errors": [
-    {
-      "row_number": 3,
-      "error": "side must be one of: long, short"
-    }
-  ]
-}
-```
+Common codes: `missing_required_column`, `invalid_side`, `invalid_datetime`, `naive_datetime_not_allowed`, `invalid_numeric`, `duplicate_trade`, `too_many_rows`, `file_too_large`, `invalid_json`.

@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import ForeignKey, Index, String, Text
+from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -11,7 +11,10 @@ from app.db.base import Base
 
 class Strategy(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "strategies"
-    __table_args__ = (Index("ix_strategies_user_id_name", "user_id", "name"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_strategies_user_id_name"),
+        Index("ix_strategies_user_id_name", "user_id", "name"),
+    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
