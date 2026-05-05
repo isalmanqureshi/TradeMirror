@@ -37,9 +37,15 @@ def enrich_single_trade(
     event_provider: EventProvider = Depends(get_event_provider),
 ) -> TradeContextRead:
     try:
-        context = enrich_trade_context(db=db, trade_id=trade_id, market_data_provider=market_data_provider, event_provider=event_provider)
+        context = enrich_trade_context(
+            db=db,
+            trade_id=trade_id,
+            market_data_provider=market_data_provider,
+            event_provider=event_provider,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail={"code": str(exc)}) from exc
+
     db.commit()
     return TradeContextRead.model_validate(context)
 
@@ -49,6 +55,7 @@ def get_trade_context(trade_id: UUID, db: Session = Depends(get_db)) -> TradeCon
     context = db.scalar(select(TradeContext).where(TradeContext.trade_id == trade_id))
     if context is None:
         raise HTTPException(status_code=404, detail={"code": "trade_context_not_found"})
+
     return TradeContextRead.model_validate(context)
 
 

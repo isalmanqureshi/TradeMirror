@@ -18,24 +18,51 @@ TREND_SLOPE_THRESHOLD = Decimal("0.0001")
 
 class MarketDataProvider(Protocol):
     def get_snapshot(self, symbol: str, timestamp: datetime) -> dict[str, Any] | None: ...
-    def get_atr_percentile(self, symbol: str, timestamp: datetime) -> Decimal | float | None: ...
-    def get_realized_vol_percentile(self, symbol: str, timestamp: datetime) -> Decimal | float | None: ...
-    def get_trend_inputs(self, symbol: str, timestamp: datetime) -> dict[str, Decimal | float] | None: ...
+
+    def get_atr_percentile(
+        self, symbol: str, timestamp: datetime
+    ) -> Decimal | float | None: ...
+
+    def get_realized_vol_percentile(
+        self, symbol: str, timestamp: datetime
+    ) -> Decimal | float | None: ...
+
+    def get_trend_inputs(
+        self, symbol: str, timestamp: datetime
+    ) -> dict[str, Decimal | float] | None: ...
 
 
 class EventProvider(Protocol):
-    def get_nearest_event(self, timestamp: datetime, symbol: str | None = None) -> dict[str, Any] | None: ...
+    def get_nearest_event(
+        self, timestamp: datetime, symbol: str | None = None
+    ) -> dict[str, Any] | None: ...
 
 
 class NullMarketDataProvider:
-    def get_snapshot(self, symbol: str, timestamp: datetime) -> dict[str, Any] | None: return None
-    def get_atr_percentile(self, symbol: str, timestamp: datetime) -> Decimal | float | None: return None
-    def get_realized_vol_percentile(self, symbol: str, timestamp: datetime) -> Decimal | float | None: return None
-    def get_trend_inputs(self, symbol: str, timestamp: datetime) -> dict[str, Decimal | float] | None: return None
+    def get_snapshot(self, symbol: str, timestamp: datetime) -> dict[str, Any] | None:
+        return None
+
+    def get_atr_percentile(
+        self, symbol: str, timestamp: datetime
+    ) -> Decimal | float | None:
+        return None
+
+    def get_realized_vol_percentile(
+        self, symbol: str, timestamp: datetime
+    ) -> Decimal | float | None:
+        return None
+
+    def get_trend_inputs(
+        self, symbol: str, timestamp: datetime
+    ) -> dict[str, Decimal | float] | None:
+        return None
 
 
 class NullEventProvider:
-    def get_nearest_event(self, timestamp: datetime, symbol: str | None = None) -> dict[str, Any] | None: return None
+    def get_nearest_event(
+        self, timestamp: datetime, symbol: str | None = None
+    ) -> dict[str, Any] | None:
+        return None
 
 
 @dataclass
@@ -75,24 +102,35 @@ def _volatility_regime(atr_percentile: Decimal | None) -> str | None:
     return "high"
 
 
-def _trend_regime(trend_inputs: dict[str, Decimal | float] | None, realized_vol_percentile: Decimal | None) -> str | None:
+def _trend_regime(
+    trend_inputs: dict[str, Decimal | float] | None,
+    realized_vol_percentile: Decimal | None,
+) -> str | None:
     if trend_inputs is None:
         return None
+
     close = _to_decimal(trend_inputs.get("close"))
     ma_50 = _to_decimal(trend_inputs.get("ma_50"))
     ma_50_slope = _to_decimal(trend_inputs.get("ma_50_slope"))
     if close is None or ma_50 is None or ma_50_slope is None:
         return None
+
     if close > ma_50 and ma_50_slope > TREND_SLOPE_THRESHOLD:
         return "trending_up"
     if close < ma_50 and ma_50_slope < -TREND_SLOPE_THRESHOLD:
         return "trending_down"
     if realized_vol_percentile is not None and realized_vol_percentile > Decimal("80"):
         return "volatile"
+
     return "ranging"
 
 
-def enrich_trade_context(db: Session, trade_id: UUID, market_data_provider: MarketDataProvider | None = None, event_provider: EventProvider | None = None) -> TradeContext:
+def enrich_trade_context(
+    db: Session,
+    trade_id: UUID,
+    market_data_provider: MarketDataProvider | None = None,
+    event_provider: EventProvider | None = None,
+) -> TradeContext:
     trade = db.scalar(select(Trade).where(Trade.id == trade_id))
     if trade is None:
         raise ValueError("trade_not_found")
@@ -102,16 +140,27 @@ def enrich_trade_context(db: Session, trade_id: UUID, market_data_provider: Mark
 
     entry_time = trade.entry_time
     context_payload: dict[str, Any] = {
-        "market_data_available": not isinstance(market_data_provider, NullMarketDataProvider),
+        "market_data_available": not isinstance(
+            market_data_provider, NullMarketDataProvider
+        ),
         "event_data_available": not isinstance(event_provider, NullEventProvider),
     }
+
     session_label = trade.session_label or _compute_session_label(entry_time)
     context_payload["session_source"] = "trade" if trade.session_label else "computed"
     context_payload["session_label"] = session_label
-    context_payload["holding_minutes"] = int((trade.exit_time - trade.entry_time).total_seconds() // 60) if trade.exit_time else None
+    context_payload["holding_minutes"] = (
+        int((trade.exit_time - trade.entry_time).total_seconds() // 60)
+        if trade.exit_time
+        else None
+    )
 
-    atr_percentile = _to_decimal(market_data_provider.get_atr_percentile(trade.symbol, entry_time))
-    realized_vol_percentile = _to_decimal(market_data_provider.get_realized_vol_percentile(trade.symbol, entry_time))
+    atr_percentile = _to_decimal(
+        market_data_provider.get_atr_percentile(trade.symbol, entry_time)
+    )
+    realized_vol_percentile = _to_decimal(
+        market_data_provider.get_realized_vol_percentile(trade.symbol, entry_time)
+    )
     trend_inputs = market_data_provider.get_trend_inputs(trade.symbol, entry_time)
     snapshot = market_data_provider.get_snapshot(trade.symbol, entry_time) or {}
     vix_level = _to_decimal(snapshot.get("vix_level"))
@@ -150,13 +199,26 @@ def enrich_trade_context(db: Session, trade_id: UUID, market_data_provider: Mark
     context.liquidity_score = liquidity_score
     context.context_payload = context_payload
     db.flush()
+
     logger.info("trade_enriched", extra={"trade_id": str(trade_id), "symbol": trade.symbol})
     return context
 
 
-def batch_enrich_trade_context(db: Session, strategy_id: UUID | None = None, source_type: str | None = None, symbol: str | None = None, start_date: datetime | None = None, end_date: datetime | None = None, limit: int | None = None, skip_existing: bool = False, market_data_provider: MarketDataProvider | None = None, event_provider: EventProvider | None = None) -> BatchEnrichmentSummary:
+def batch_enrich_trade_context(
+    db: Session,
+    strategy_id: UUID | None = None,
+    source_type: str | None = None,
+    symbol: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    limit: int | None = None,
+    skip_existing: bool = False,
+    market_data_provider: MarketDataProvider | None = None,
+    event_provider: EventProvider | None = None,
+) -> BatchEnrichmentSummary:
     summary = BatchEnrichmentSummary()
     stmt = select(Trade)
+
     if strategy_id is not None:
         stmt = stmt.where(Trade.strategy_id == strategy_id)
     if source_type is not None:
@@ -174,7 +236,11 @@ def batch_enrich_trade_context(db: Session, strategy_id: UUID | None = None, sou
     existing_ids: set[UUID] = set()
     if skip_existing and trades:
         trade_ids = [trade.id for trade in trades]
-        existing_ids = set(db.scalars(select(TradeContext.trade_id).where(TradeContext.trade_id.in_(trade_ids))).all())
+        existing_ids = set(
+            db.scalars(
+                select(TradeContext.trade_id).where(TradeContext.trade_id.in_(trade_ids))
+            ).all()
+        )
 
     for trade in trades:
         summary.processed += 1
@@ -182,10 +248,20 @@ def batch_enrich_trade_context(db: Session, strategy_id: UUID | None = None, sou
             if skip_existing and trade.id in existing_ids:
                 summary.skipped += 1
                 continue
-            enrich_trade_context(db, trade.id, market_data_provider=market_data_provider, event_provider=event_provider)
+
+            enrich_trade_context(
+                db,
+                trade.id,
+                market_data_provider=market_data_provider,
+                event_provider=event_provider,
+            )
             summary.enriched += 1
         except Exception:
             summary.errors += 1
-            logger.exception("trade_enrichment_failed", extra={"trade_id": str(trade.id), "symbol": trade.symbol})
+            logger.exception(
+                "trade_enrichment_failed",
+                extra={"trade_id": str(trade.id), "symbol": trade.symbol},
+            )
+
     db.commit()
     return summary

@@ -34,7 +34,9 @@ Service supports optional providers:
 - `MarketDataProvider`: snapshot, ATR percentile, realized vol percentile, trend inputs.
 - `EventProvider`: nearest event around timestamp.
 
-No live market/event API integration is included in this phase.
+Phase 3 uses null/stub providers by default via API dependency injection.
+Real market/event integrations are intentionally deferred to later phases.
+Provider-backed tests demonstrate how concrete providers can plug in without changing service contracts.
 
 ## Idempotent Upsert
 `trade_context` is one row per trade. Re-running enrichment updates existing row fields instead of creating duplicates.
