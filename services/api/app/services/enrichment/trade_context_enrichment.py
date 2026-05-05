@@ -27,6 +27,17 @@ class EventProvider(Protocol):
     def get_nearest_event(self, timestamp: datetime, symbol: str | None = None) -> dict[str, Any] | None: ...
 
 
+class NullMarketDataProvider:
+    def get_snapshot(self, symbol: str, timestamp: datetime) -> dict[str, Any] | None: return None
+    def get_atr_percentile(self, symbol: str, timestamp: datetime) -> Decimal | float | None: return None
+    def get_realized_vol_percentile(self, symbol: str, timestamp: datetime) -> Decimal | float | None: return None
+    def get_trend_inputs(self, symbol: str, timestamp: datetime) -> dict[str, Decimal | float] | None: return None
+
+
+class NullEventProvider:
+    def get_nearest_event(self, timestamp: datetime, symbol: str | None = None) -> dict[str, Any] | None: return None
+
+
 @dataclass
 class BatchEnrichmentSummary:
     processed: int = 0
@@ -86,44 +97,39 @@ def enrich_trade_context(db: Session, trade_id: UUID, market_data_provider: Mark
     if trade is None:
         raise ValueError("trade_not_found")
 
+    market_data_provider = market_data_provider or NullMarketDataProvider()
+    event_provider = event_provider or NullEventProvider()
+
     entry_time = trade.entry_time
-    context_payload: dict[str, Any] = {}
+    context_payload: dict[str, Any] = {
+        "market_data_available": not isinstance(market_data_provider, NullMarketDataProvider),
+        "event_data_available": not isinstance(event_provider, NullEventProvider),
+    }
     session_label = trade.session_label or _compute_session_label(entry_time)
     context_payload["session_source"] = "trade" if trade.session_label else "computed"
     context_payload["session_label"] = session_label
     context_payload["holding_minutes"] = int((trade.exit_time - trade.entry_time).total_seconds() // 60) if trade.exit_time else None
 
-    atr_percentile = realized_vol_percentile = vix_level = volume_percentile = None
-    spread_at_entry = spread_at_exit = liquidity_score = None
-    trend_inputs = None
-    if market_data_provider is not None:
-        atr_percentile = _to_decimal(market_data_provider.get_atr_percentile(trade.symbol, entry_time))
-        realized_vol_percentile = _to_decimal(market_data_provider.get_realized_vol_percentile(trade.symbol, entry_time))
-        trend_inputs = market_data_provider.get_trend_inputs(trade.symbol, entry_time)
-        snapshot = market_data_provider.get_snapshot(trade.symbol, entry_time) or {}
-        vix_level = _to_decimal(snapshot.get("vix_level"))
-        volume_percentile = _to_decimal(snapshot.get("volume_percentile"))
-        spread_at_entry = _to_decimal(snapshot.get("spread_at_entry"))
-        spread_at_exit = _to_decimal(snapshot.get("spread_at_exit"))
-        liquidity_score = _to_decimal(snapshot.get("liquidity_score"))
-        context_payload["atr_source"] = "market_data_provider"
-    else:
-        logger.info("market_data_provider_missing", extra={"trade_id": str(trade_id), "symbol": trade.symbol})
+    atr_percentile = _to_decimal(market_data_provider.get_atr_percentile(trade.symbol, entry_time))
+    realized_vol_percentile = _to_decimal(market_data_provider.get_realized_vol_percentile(trade.symbol, entry_time))
+    trend_inputs = market_data_provider.get_trend_inputs(trade.symbol, entry_time)
+    snapshot = market_data_provider.get_snapshot(trade.symbol, entry_time) or {}
+    vix_level = _to_decimal(snapshot.get("vix_level"))
+    volume_percentile = _to_decimal(snapshot.get("volume_percentile"))
+    spread_at_entry = _to_decimal(snapshot.get("spread_at_entry"))
+    spread_at_exit = _to_decimal(snapshot.get("spread_at_exit"))
+    liquidity_score = _to_decimal(snapshot.get("liquidity_score"))
 
+    nearest = event_provider.get_nearest_event(entry_time, symbol=trade.symbol)
     macro_event_nearby = macro_event_name = minutes_to_event = None
-    if event_provider is not None:
-        nearest = event_provider.get_nearest_event(entry_time, symbol=trade.symbol)
-        if nearest is not None:
-            event_time: datetime = nearest["timestamp"]
-            minutes_to_event = int(abs((event_time - entry_time).total_seconds()) // 60)
-            macro_event_nearby = minutes_to_event <= 120
-            macro_event_name = nearest.get("name")
-    else:
-        logger.info("event_provider_missing", extra={"trade_id": str(trade_id), "symbol": trade.symbol})
+    if nearest is not None:
+        event_time: datetime = nearest["timestamp"]
+        minutes_to_event = int(abs((event_time - entry_time).total_seconds()) // 60)
+        macro_event_nearby = minutes_to_event <= 120
+        macro_event_name = nearest.get("name")
 
     context_payload["trend_inputs"] = trend_inputs
-    volatility_regime = _volatility_regime(atr_percentile)
-    trend_regime = _trend_regime(trend_inputs, realized_vol_percentile)
+    context_payload["atr_source"] = "market_data_provider" if atr_percentile is not None else None
 
     context = db.scalar(select(TradeContext).where(TradeContext.trade_id == trade_id))
     if context is None:
@@ -134,8 +140,8 @@ def enrich_trade_context(db: Session, trade_id: UUID, market_data_provider: Mark
     context.realized_vol_percentile = realized_vol_percentile
     context.vix_level = vix_level
     context.volume_percentile = volume_percentile
-    context.trend_regime = trend_regime
-    context.volatility_regime = volatility_regime
+    context.trend_regime = _trend_regime(trend_inputs, realized_vol_percentile)
+    context.volatility_regime = _volatility_regime(atr_percentile)
     context.macro_event_nearby = macro_event_nearby
     context.macro_event_name = macro_event_name
     context.minutes_to_event = minutes_to_event
@@ -144,7 +150,7 @@ def enrich_trade_context(db: Session, trade_id: UUID, market_data_provider: Mark
     context.liquidity_score = liquidity_score
     context.context_payload = context_payload
     db.flush()
-    logger.info("trade_enriched", extra={"trade_id": str(trade_id), "symbol": trade.symbol, "result": "enriched"})
+    logger.info("trade_enriched", extra={"trade_id": str(trade_id), "symbol": trade.symbol})
     return context
 
 
@@ -164,10 +170,16 @@ def batch_enrich_trade_context(db: Session, strategy_id: UUID | None = None, sou
     if limit is not None:
         stmt = stmt.limit(limit)
 
-    for trade in db.scalars(stmt).all():
+    trades = db.scalars(stmt).all()
+    existing_ids: set[UUID] = set()
+    if skip_existing and trades:
+        trade_ids = [trade.id for trade in trades]
+        existing_ids = set(db.scalars(select(TradeContext.trade_id).where(TradeContext.trade_id.in_(trade_ids))).all())
+
+    for trade in trades:
         summary.processed += 1
         try:
-            if skip_existing and db.scalar(select(TradeContext).where(TradeContext.trade_id == trade.id)) is not None:
+            if skip_existing and trade.id in existing_ids:
                 summary.skipped += 1
                 continue
             enrich_trade_context(db, trade.id, market_data_provider=market_data_provider, event_provider=event_provider)
