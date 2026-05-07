@@ -22,6 +22,7 @@ class AnalyticsFilters:
 
 def apply_trade_filters(stmt: Select, filters: AnalyticsFilters) -> Select:
     stmt = stmt.where(Trade.user_id == filters.user_id)
+
     if filters.strategy_id is not None:
         stmt = stmt.where(Trade.strategy_id == filters.strategy_id)
     if filters.source_type is not None:
@@ -34,4 +35,5 @@ def apply_trade_filters(stmt: Select, filters: AnalyticsFilters) -> Select:
         stmt = stmt.where(Trade.entry_time >= filters.start_date)
     if filters.end_date is not None:
         stmt = stmt.where(Trade.entry_time <= filters.end_date)
+
     return stmt

@@ -1,15 +1,49 @@
 from __future__ import annotations
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from app.models import Trade
 from app.services.analytics.filters import AnalyticsFilters, apply_trade_filters
 
+
 def compare_backtest_live(db: Session, filters: AnalyticsFilters) -> dict:
-    trades=[t for t in db.scalars(apply_trade_filters(select(Trade), filters)).all() if t.r_multiple is not None]
-    b=[float(t.r_multiple) for t in trades if t.source_type=='backtest']
-    l=[float(t.r_multiple) for t in trades if t.source_type=='live']
-    if len(b)<5 or len(l)<5:
-        return {"filters": filters.__dict__, "status":"insufficient_data", "backtest_sample_size":len(b), "live_sample_size":len(l), "ks_test":None, "message":"Insufficient sample sizes: require backtest>=5 and live>=5"}
-    bavg=sum(b)/len(b); lavg=sum(l)/len(l)
-    bwr=len([v for v in b if v>0])/len(b); lwr=len([v for v in l if v>0])/len(l)
-    return {"filters": filters.__dict__,"status":"ok","backtest_sample_size":len(b),"live_sample_size":len(l),"backtest_average_r":bavg,"live_average_r":lavg,"backtest_win_rate":bwr,"live_win_rate":lwr,"expectancy_delta":lavg-bavg,"average_r_delta":lavg-bavg,"win_rate_delta":lwr-bwr,"ks_test":None,"message":"Statistical test not available in this phase"}
+    trades = [
+        trade
+        for trade in db.scalars(apply_trade_filters(select(Trade), filters)).all()
+        if trade.r_multiple is not None
+    ]
+
+    backtest_r = [float(trade.r_multiple) for trade in trades if trade.source_type == "backtest"]
+    live_r = [float(trade.r_multiple) for trade in trades if trade.source_type == "live"]
+
+    if len(backtest_r) < 5 or len(live_r) < 5:
+        return {
+            "filters": filters.__dict__,
+            "status": "insufficient_data",
+            "backtest_sample_size": len(backtest_r),
+            "live_sample_size": len(live_r),
+            "ks_test": None,
+            "message": "Insufficient sample sizes: require backtest>=5 and live>=5",
+        }
+
+    backtest_average_r = sum(backtest_r) / len(backtest_r)
+    live_average_r = sum(live_r) / len(live_r)
+    backtest_win_rate = len([value for value in backtest_r if value > 0]) / len(backtest_r)
+    live_win_rate = len([value for value in live_r if value > 0]) / len(live_r)
+
+    return {
+        "filters": filters.__dict__,
+        "status": "ok",
+        "backtest_sample_size": len(backtest_r),
+        "live_sample_size": len(live_r),
+        "backtest_average_r": backtest_average_r,
+        "live_average_r": live_average_r,
+        "backtest_win_rate": backtest_win_rate,
+        "live_win_rate": live_win_rate,
+        "expectancy_delta": live_average_r - backtest_average_r,
+        "average_r_delta": live_average_r - backtest_average_r,
+        "win_rate_delta": live_win_rate - backtest_win_rate,
+        "ks_test": None,
+        "message": "Statistical test not available in this phase",
+    }
