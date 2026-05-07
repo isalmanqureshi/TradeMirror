@@ -218,6 +218,7 @@ def test_routes_use_injected_providers():
 
     single = enrich_single_trade(trade.id, db, provider, event_provider)
     summary = enrich_context_batch(
+        limit=None,
         db=db,
         market_data_provider=provider,
         event_provider=event_provider,

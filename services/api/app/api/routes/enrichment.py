@@ -29,6 +29,34 @@ def get_event_provider() -> EventProvider:
     return NullEventProvider()
 
 
+def _run_batch_enrichment(
+    *,
+    db: Session,
+    strategy_id: UUID | None = None,
+    source_type: str | None = None,
+    symbol: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    limit: int | None = None,
+    skip_existing: bool = False,
+    market_data_provider: MarketDataProvider,
+    event_provider: EventProvider,
+) -> BatchEnrichmentResponse:
+    summary = batch_enrich_trade_context(
+        db=db,
+        strategy_id=strategy_id,
+        source_type=source_type,
+        symbol=symbol,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        skip_existing=skip_existing,
+        market_data_provider=market_data_provider,
+        event_provider=event_provider,
+    )
+    return BatchEnrichmentResponse(**summary.__dict__)
+
+
 @router.post("/trades/{trade_id}/enrich", response_model=TradeContextRead)
 def enrich_single_trade(
     trade_id: UUID,
@@ -72,16 +100,16 @@ def enrich_context_batch(
     market_data_provider: MarketDataProvider = Depends(get_market_data_provider),
     event_provider: EventProvider = Depends(get_event_provider),
 ) -> BatchEnrichmentResponse:
-    summary = batch_enrich_trade_context(
+    resolved_limit = limit if isinstance(limit, int) or limit is None else None
+    return _run_batch_enrichment(
         db=db,
         strategy_id=strategy_id,
         source_type=source_type,
         symbol=symbol,
         start_date=start_date,
         end_date=end_date,
-        limit=limit,
+        limit=resolved_limit,
         skip_existing=skip_existing,
         market_data_provider=market_data_provider,
         event_provider=event_provider,
     )
-    return BatchEnrichmentResponse(**summary.__dict__)
