@@ -71,7 +71,9 @@ class FakeDB:
                 items = items[: stmt._limit_clause.value]
             return type("S", (), {"all": lambda self: items})()
 
-        if expr is not None and str(expr).endswith("trade_context.trade_id"):
+        if expr is TradeContext.trade_id or (
+            expr is not None and str(expr).endswith("trade_context.trade_id")
+        ):
             values = list(self.contexts.keys())
             return type("S", (), {"all": lambda self: values})()
 
@@ -79,9 +81,24 @@ class FakeDB:
 
     def add(self, obj):
         if isinstance(obj, TradeContext):
+            now = datetime.now(timezone.utc)
+            if obj.id is None:
+                obj.id = uuid4()
+            if obj.created_at is None:
+                obj.created_at = now
+            if obj.updated_at is None:
+                obj.updated_at = now
             self.contexts[obj.trade_id] = obj
 
     def flush(self):
+        now = datetime.now(timezone.utc)
+        for context in self.contexts.values():
+            if context.id is None:
+                context.id = uuid4()
+            if context.created_at is None:
+                context.created_at = now
+            if context.updated_at is None:
+                context.updated_at = now
         return None
 
     def commit(self):
