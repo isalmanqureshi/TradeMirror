@@ -12,20 +12,13 @@ def _sum_group_sample_size(groups: list[dict]) -> int:
     return sum(int(group.get("sample_size", 0) or 0) for group in groups)
 
 
-def _sample_details(
-    intent: str,
-    analytics: dict,
-    trades: list[dict],
-    journal_entries: list[dict],
-    trade_context: list[dict],
-) -> tuple[int, str]:
+def _sample_details(intent: str, analytics: dict, trades: list[dict], journal_entries: list[dict], trade_context: list[dict]) -> tuple[int, str]:
+    if intent == "trade_lookup":
+        return len(trades), "trades"
     if intent == "journal_lookup":
         return len(journal_entries), "journal entries"
     if intent == "trade_context_lookup":
         return len(trade_context), "trade context records"
-    if intent == "trade_lookup":
-        return len(trades), "trades"
-
     if intent == "performance_summary":
         return int(analytics.get("sample_size") or len(trades)), "trades"
     if intent == "regime_analysis":
@@ -33,23 +26,19 @@ def _sample_details(
         return _sum_group_sample_size(groups) or len(trades), "trades"
     if intent == "execution_quality":
         groups = analytics.get("groups") or []
-        if groups:
-            return _sum_group_sample_size(groups), "trades"
-        return int(analytics.get("sample_size") or len(trades)), "trades"
+        return (_sum_group_sample_size(groups) if groups else int(analytics.get("sample_size") or len(trades))), "trades"
     if intent == "backtest_live_comparison":
         bt = int(analytics.get("backtest_sample_size") or 0)
         live = int(analytics.get("live_sample_size") or 0)
-        total = bt + live
-        return (total or len(trades)), "trades"
+        return (bt + live) or len(trades), "trades"
     if intent == "edge_decay":
         points = analytics.get("points") or []
-        return int(analytics.get("sample_size") or len(points) or len(trades)), "trades"
+        return int(len(points) or analytics.get("sample_size") or len(trades)), "trades"
     if intent == "risk_drift":
         risk_size = analytics.get("sample_size")
         if risk_size is None:
             risk_size = analytics.get("risk_sample_size") or analytics.get("planned_risk_sample_size") or analytics.get("actual_risk_sample_size")
         return int(risk_size or len(trades)), "trades"
-
     return len(trades), "trades"
 
 
@@ -66,10 +55,7 @@ def compose_answer(intent: str, analytics: dict, trades: list[dict], journal_ent
             "so the result may not be statistically meaningful."
         )
 
-    base = (
-        f"Based on {sample_size} matching {evidence_label}, your historical data suggests "
-        f"the matching sample shows {intent.replace('_', ' ')} patterns."
-    )
+    base = f"Based on {sample_size} matching {evidence_label}, your historical data suggests the matching sample shows {intent.replace('_', ' ')} patterns."
     if trades:
         base += f" Evidence includes {len(trades)} trade records."
     if journal_entries:

@@ -15,12 +15,7 @@ DEMO_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
 def get_current_user_id_for_demo(x_demo_user_id: str | None = Header(default=None)) -> UUID:
-    """Temporary user dependency until auth is implemented.
-
-    Allows explicit header override in dev/tests, otherwise falls back to a
-    single documented demo user id.
-    """
-
+    """Temporary user dependency until auth is implemented."""
     if x_demo_user_id is None:
         return DEMO_USER_ID
 

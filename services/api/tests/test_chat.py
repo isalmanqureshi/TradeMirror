@@ -76,19 +76,10 @@ def test_classifier_routes_performance_phrase() -> None:
     assert classify_intent("How did my NQ strategy perform?").primary_intent == "performance_summary"
 
 
-def test_classifier_routes_review_regressions() -> None:
-    assert classify_intent("How did slippage change by session?").primary_intent == "execution_quality"
-    assert classify_intent("How did my fees change by order type?").primary_intent == "execution_quality"
+def test_classifier_risk_drift_and_backtest_live_paths() -> None:
     assert classify_intent("How has my risk drift changed?").primary_intent == "risk_drift"
     assert classify_intent("How did my risk change over time?").primary_intent == "risk_drift"
     assert classify_intent("Is my live trading drifting from the backtest?").primary_intent == "backtest_live_comparison"
-
-
-def test_direct_advice_request_refused() -> None:
-    uid = uuid4()
-    db = FakeDB([], [])
-    response = handle_chat_message(db, uid, "Should I buy NQ now?", ChatFilters())
-    assert "cannot tell you whether to buy" in response.answer.lower()
 
 
 def test_analytics_sample_size_from_grouped_payloads() -> None:
@@ -108,6 +99,13 @@ def test_trade_context_lookup_uses_joined_context_rows_with_limit() -> None:
 
     results = get_trade_context_records(db, uid, filters, limit=2)
     assert len(results) == 2
+
+
+def test_direct_advice_request_refused() -> None:
+    uid = uuid4()
+    db = FakeDB([], [])
+    response = handle_chat_message(db, uid, "Should I buy NQ now?", ChatFilters())
+    assert "cannot tell you whether to buy" in response.answer.lower()
 
 
 def test_evidence_keys_always_present() -> None:

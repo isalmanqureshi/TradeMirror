@@ -12,13 +12,7 @@ from app.services.analytics import (
 )
 from app.services.chat.classifier import classify_intent
 from app.services.chat.composer import compose_answer
-from app.services.chat.retrieval import (
-    get_best_trades,
-    get_journal_entries,
-    get_recent_trades,
-    get_trade_context_records,
-    get_worst_trades,
-)
+from app.services.chat.retrieval import get_best_trades, get_journal_entries, get_recent_trades, get_trade_context_records, get_worst_trades
 from app.services.chat.safety import is_direct_advice_request, safe_advice_refusal
 
 
@@ -47,72 +41,60 @@ def handle_chat_message(db, user_id, message: str, filters: ChatFilters) -> Chat
         )
 
     classification = classify_intent(message)
-    analytics_filters = _analytics_filters(user_id, filters)
+    af = _analytics_filters(user_id, filters)
+    text = message.lower()
 
     analytics: dict = {}
     trades: list[dict] = []
     journal_entries: list[dict] = []
     trade_context: list[dict] = []
 
-    text = message.lower()
-
     if classification.primary_intent == "performance_summary":
-        analytics = get_performance_summary(db, analytics_filters)
-        if any(keyword in text for keyword in ("loss", "underperform", "bad", "drawdown")):
-            trades = get_worst_trades(db, user_id, analytics_filters, filters.limit)
-        else:
-            trades = get_recent_trades(db, user_id, analytics_filters, filters.limit)
+        analytics = get_performance_summary(db, af)
+        trades = get_worst_trades(db, user_id, af, filters.limit) if any(k in text for k in ("loss", "underperform", "bad", "drawdown")) else get_recent_trades(db, user_id, af, filters.limit)
     elif classification.primary_intent == "regime_analysis":
         group_by = "volatility_regime"
-        if any(keyword in text for keyword in ("trend", "ranging")):
+        if any(k in text for k in ("trend", "ranging")):
             group_by = "trend_regime"
-        elif any(keyword in text for keyword in ("session", "time", "open", "close")):
+        elif any(k in text for k in ("session", "time", "open", "close")):
             group_by = "session_label"
-        elif any(keyword in text for keyword in ("news", "macro", "cpi", "fomc", "event")):
+        elif any(k in text for k in ("news", "macro", "cpi", "fomc", "event")):
             group_by = "macro_event_nearby"
-        analytics = get_regime_sensitivity(db, analytics_filters, group_by)
+        analytics = get_regime_sensitivity(db, af, group_by)
     elif classification.primary_intent == "execution_quality":
         group_by = "session_label"
-        if any(keyword in text for keyword in ("order", "fill")):
+        if any(k in text for k in ("order", "fill")):
             group_by = "order_type"
-        elif any(keyword in text for keyword in ("instrument", "symbol")):
+        elif any(k in text for k in ("instrument", "symbol")):
             group_by = "symbol"
         elif "volatility" in text:
             group_by = "volatility_regime"
-        analytics = get_execution_quality(db, analytics_filters, group_by)
+        analytics = get_execution_quality(db, af, group_by)
     elif classification.primary_intent == "risk_drift":
-        analytics = get_risk_drift(db, analytics_filters)
+        analytics = get_risk_drift(db, af)
     elif classification.primary_intent == "edge_decay":
-        analytics = get_edge_decay(db, analytics_filters)
+        analytics = get_edge_decay(db, af)
     elif classification.primary_intent == "backtest_live_comparison":
-        analytics = compare_backtest_live(db, analytics_filters)
+        analytics = compare_backtest_live(db, af)
     elif classification.primary_intent == "trade_lookup":
         if "worst" in text or "losing" in text:
-            trades = get_worst_trades(db, user_id, analytics_filters, filters.limit)
+            trades = get_worst_trades(db, user_id, af, filters.limit)
         elif "best" in text or "winning" in text:
-            trades = get_best_trades(db, user_id, analytics_filters, filters.limit)
+            trades = get_best_trades(db, user_id, af, filters.limit)
         else:
-            trades = get_recent_trades(db, user_id, analytics_filters, filters.limit)
+            trades = get_recent_trades(db, user_id, af, filters.limit)
     elif classification.primary_intent == "journal_lookup":
-        journal_entries = get_journal_entries(db, user_id, analytics_filters, query=message, limit=filters.limit)
+        journal_entries = get_journal_entries(db, user_id, af, query=message, limit=filters.limit)
     elif classification.primary_intent == "trade_context_lookup":
-        trade_context = get_trade_context_records(db, user_id, analytics_filters, filters.limit)
+        trade_context = get_trade_context_records(db, user_id, af, filters.limit)
 
     answer = compose_answer(classification.primary_intent, analytics, trades, journal_entries, trade_context)
     return ChatResponse(
         intent=classification.primary_intent,
         secondary_intents=classification.secondary_intents,
         answer=answer,
-        evidence={
-            "analytics": analytics,
-            "trades": trades,
-            "journal_entries": journal_entries,
-            "trade_context": trade_context,
-        },
+        evidence={"analytics": analytics, "trades": trades, "journal_entries": journal_entries, "trade_context": trade_context},
         filters=filters,
         warnings=[],
-        suggested_questions=[
-            "Which volatility regime hurt me most?",
-            "Is live performance drifting from backtest?",
-        ],
+        suggested_questions=["Which volatility regime hurt me most?", "Is live performance drifting from backtest?"],
     )
