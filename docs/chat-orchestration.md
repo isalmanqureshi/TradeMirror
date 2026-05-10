@@ -24,7 +24,7 @@ Deterministic backend chat layer for `/chat` that classifies intent, routes to e
 - Composer uses analytical framing only and avoids recommendation language.
 
 ## Demo user limitation
-- Route currently uses an explicit `get_current_user_id_for_demo()` TODO until auth is implemented.
+- Route uses an explicit temporary dependency with a `DEMO_USER_ID` fallback and optional `X-Demo-User-Id` header override for local/dev testing; this will be replaced by real auth.
 
 ## Why deterministic first
 - Keeps behavior testable, explainable, and CI-stable before introducing probabilistic/LLM components.

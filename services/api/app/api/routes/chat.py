@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -11,13 +11,30 @@ from app.services.chat import handle_chat_message
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
+DEMO_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
-def get_current_user_id_for_demo() -> UUID:
-    # TODO: replace with real authentication dependency.
-    return UUID("00000000-0000-0000-0000-000000000001")
+
+def get_current_user_id_for_demo(x_demo_user_id: str | None = Header(default=None)) -> UUID:
+    """Temporary user dependency until auth is implemented.
+
+    Allows explicit header override in dev/tests, otherwise falls back to a
+    single documented demo user id.
+    """
+
+    if x_demo_user_id is None:
+        return DEMO_USER_ID
+
+    try:
+        return UUID(x_demo_user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid X-Demo-User-Id header") from exc
 
 
 @router.post("", response_model=ChatResponse)
-def chat(request: ChatRequest, db: Session = Depends(get_db)) -> ChatResponse:
+def chat(
+    request: ChatRequest,
+    db: Session = Depends(get_db),
+    user_id: UUID = Depends(get_current_user_id_for_demo),
+) -> ChatResponse:
     filters = ChatFilters.model_validate(request.model_dump(exclude={"message"}))
-    return handle_chat_message(db=db, user_id=get_current_user_id_for_demo(), message=request.message, filters=filters)
+    return handle_chat_message(db=db, user_id=user_id, message=request.message, filters=filters)
