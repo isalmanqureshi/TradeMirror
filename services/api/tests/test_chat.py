@@ -11,7 +11,9 @@ from app.main import app
 from app.models import JournalEntry, Trade, TradeContext
 from app.schemas.chat import ChatFilters
 from app.services.chat.classifier import classify_intent
+from app.services.analytics import AnalyticsFilters
 from app.services.chat.orchestrator import handle_chat_message
+from app.services.chat.retrieval import get_best_trades
 
 
 class FakeResult:
@@ -71,6 +73,12 @@ def test_classifier_routes_other_intents() -> None:
     assert classify_intent("Is my live trading drifting from the backtest?").primary_intent == "backtest_live_comparison"
 
 
+
+
+def test_classifier_prefers_execution_over_generic_perform_wording() -> None:
+    assert classify_intent("How did slippage change by session?").primary_intent == "execution_quality"
+    assert classify_intent("How did my fees change by order type?").primary_intent == "execution_quality"
+    assert classify_intent("How did my risk change over time?").primary_intent == "risk_drift"
 def test_direct_advice_request_refused() -> None:
     uid = uuid4()
     db = FakeDB([], [])
@@ -127,3 +135,22 @@ def test_chat_route_accepts_demo_user_header() -> None:
     assert response.status_code == 200
     assert set(response.json()["evidence"].keys()) == {"analytics", "trades", "journal_entries", "trade_context"}
     app.dependency_overrides.clear()
+
+
+def test_get_best_trades_query_excludes_double_null_and_uses_nulls_last() -> None:
+    class CaptureDB:
+        def __init__(self):
+            self.stmt = None
+
+        def scalars(self, stmt):
+            self.stmt = stmt
+            return FakeResult([])
+
+    uid = uuid4()
+    db = CaptureDB()
+    filters = AnalyticsFilters(user_id=uid)
+    get_best_trades(db, uid, filters, limit=10)
+
+    compiled = str(db.stmt.compile(compile_kwargs={"literal_binds": True}))
+    assert "r_multiple IS NOT NULL OR trades.pnl IS NOT NULL" in compiled
+    assert "NULLS LAST" in compiled

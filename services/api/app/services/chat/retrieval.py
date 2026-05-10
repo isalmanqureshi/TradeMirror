@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from sqlalchemy import or_, select
+from sqlalchemy import nullslast, or_, select
 
 from app.models import JournalEntry, Trade, TradeContext
 from app.services.analytics.filters import AnalyticsFilters, apply_trade_filters
@@ -37,7 +37,16 @@ def get_worst_trades(db, user_id, filters: AnalyticsFilters, limit: int = 10) ->
 
 
 def get_best_trades(db, user_id, filters: AnalyticsFilters, limit: int = 10) -> list[dict]:
-    stmt = apply_trade_filters(select(Trade), filters).order_by(Trade.r_multiple.desc(), Trade.pnl.desc()).limit(limit)
+    stmt = (
+        apply_trade_filters(select(Trade), filters)
+        .where(or_(Trade.r_multiple.is_not(None), Trade.pnl.is_not(None)))
+        .order_by(
+            nullslast(Trade.r_multiple.desc()),
+            nullslast(Trade.pnl.desc()),
+            Trade.entry_time.desc(),
+        )
+        .limit(limit)
+    )
     return [_trade_to_dict(trade) for trade in db.scalars(stmt).all()]
 
 
