@@ -77,14 +77,12 @@ def get_journal_entries(db, user_id, filters: AnalyticsFilters, query: str | Non
 
 
 def get_trade_context_records(db, user_id, filters: AnalyticsFilters, limit: int = 10) -> list[dict]:
-    stmt = apply_trade_filters(select(Trade), filters).limit(limit)
-    trades = db.scalars(stmt).all()
+    stmt = apply_trade_filters(select(Trade, TradeContext).join(TradeContext, TradeContext.trade_id == Trade.id), filters)
+    stmt = stmt.order_by(Trade.entry_time.desc()).limit(limit)
+    rows = db.execute(stmt).all()
 
     out: list[dict] = []
-    for trade in trades:
-        context: TradeContext | None = trade.trade_context
-        if context is None:
-            continue
+    for trade, context in rows:
         out.append(
             {
                 "trade_id": trade.id,

@@ -32,7 +32,7 @@ INTENT_KEYWORDS: dict[str, tuple[str, ...]] = {
     "execution_quality": ("slippage", "fees", "execution", "order type", "fills"),
     "risk_drift": ("risk", "oversized", "position size", "planned risk", "actual risk"),
     "edge_decay": ("edge", "decay", "getting worse", "rolling", "deteriorating"),
-    "backtest_live_comparison": ("backtest", "live", "drift", "valid", "still working"),
+    "backtest_live_comparison": ("backtest", "live", "drift", "drifting", "valid", "still working"),
     "trade_lookup": (
         "show trades",
         "recent trades",
@@ -57,11 +57,22 @@ PRIORITY: list[str] = [
     "trade_context_lookup",
 ]
 
+RISK_TERMS = ("risk", "planned risk", "actual risk", "position size", "oversized")
+RISK_DRIFT_TERMS = ("drift", "drifting", "changed", "change", "over time")
+
 
 def classify_intent(message: str) -> IntentClassification:
     normalized = message.lower().strip()
-    matches: dict[str, list[str]] = {}
 
+    if any(term in normalized for term in RISK_TERMS) and any(term in normalized for term in RISK_DRIFT_TERMS):
+        return IntentClassification(
+            primary_intent="risk_drift",
+            secondary_intents=[],
+            confidence=0.95,
+            reason="matched risk terms with drift/change terms",
+        )
+
+    matches: dict[str, list[str]] = {}
     for intent, keywords in INTENT_KEYWORDS.items():
         found = [keyword for keyword in keywords if keyword in normalized]
         if found:
