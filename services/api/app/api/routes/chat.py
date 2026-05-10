@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -14,15 +14,12 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 DEMO_USER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
-def get_current_user_id_for_demo(x_demo_user_id: str | None = Header(default=None)) -> UUID:
-    """Temporary user dependency until auth is implemented."""
-    if x_demo_user_id is None:
-        return DEMO_USER_ID
-
-    try:
-        return UUID(x_demo_user_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Invalid X-Demo-User-Id header") from exc
+def get_current_user_id_for_demo(
+    x_demo_user_id: UUID | None = Header(default=None, alias="X-Demo-User-Id"),
+) -> UUID:
+    if x_demo_user_id is not None:
+        return x_demo_user_id
+    return DEMO_USER_ID
 
 
 @router.post("", response_model=ChatResponse)

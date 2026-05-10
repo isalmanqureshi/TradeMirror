@@ -13,12 +13,12 @@ def _sum_group_sample_size(groups: list[dict]) -> int:
 
 
 def _sample_details(intent: str, analytics: dict, trades: list[dict], journal_entries: list[dict], trade_context: list[dict]) -> tuple[int, str]:
-    if intent == "trade_lookup":
-        return len(trades), "trades"
     if intent == "journal_lookup":
         return len(journal_entries), "journal entries"
     if intent == "trade_context_lookup":
         return len(trade_context), "trade context records"
+    if intent == "trade_lookup":
+        return len(trades), "trades"
     if intent == "performance_summary":
         return int(analytics.get("sample_size") or len(trades)), "trades"
     if intent == "regime_analysis":
@@ -26,11 +26,13 @@ def _sample_details(intent: str, analytics: dict, trades: list[dict], journal_en
         return _sum_group_sample_size(groups) or len(trades), "trades"
     if intent == "execution_quality":
         groups = analytics.get("groups") or []
-        return (_sum_group_sample_size(groups) if groups else int(analytics.get("sample_size") or len(trades))), "trades"
+        if groups:
+            return _sum_group_sample_size(groups), "trades"
+        return int(analytics.get("sample_size") or len(trades)), "trades"
     if intent == "backtest_live_comparison":
-        bt = int(analytics.get("backtest_sample_size") or 0)
+        backtest = int(analytics.get("backtest_sample_size") or 0)
         live = int(analytics.get("live_sample_size") or 0)
-        return (bt + live) or len(trades), "trades"
+        return (backtest + live) or len(trades), "trades"
     if intent == "edge_decay":
         points = analytics.get("points") or []
         return int(len(points) or analytics.get("sample_size") or len(trades)), "trades"

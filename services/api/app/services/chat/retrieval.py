@@ -59,14 +59,21 @@ def get_journal_entries(db, user_id, filters: AnalyticsFilters, query: str | Non
         stmt = stmt.where(or_(JournalEntry.text.ilike(like), JournalEntry.title.ilike(like)))
     stmt = stmt.order_by(JournalEntry.entry_time.desc()).limit(limit)
     entries = db.scalars(stmt).all()
-    return [{"journal_entry_id": e.id, "trade_id": e.trade_id, "entry_time": e.entry_time, "title": e.title, "text_excerpt": e.text[:160]} for e in entries]
+    return [
+        {
+            "journal_entry_id": entry.id,
+            "trade_id": entry.trade_id,
+            "entry_time": entry.entry_time,
+            "title": entry.title,
+            "text_excerpt": entry.text[:160],
+        }
+        for entry in entries
+    ]
 
 
 def get_trade_context_records(db, user_id, filters: AnalyticsFilters, limit: int = 10) -> list[dict]:
-    stmt = apply_trade_filters(
-        select(Trade, TradeContext).join(TradeContext, TradeContext.trade_id == Trade.id),
-        filters,
-    ).order_by(Trade.entry_time.desc()).limit(limit)
+    stmt = apply_trade_filters(select(Trade, TradeContext).join(TradeContext, TradeContext.trade_id == Trade.id), filters)
+    stmt = stmt.order_by(Trade.entry_time.desc()).limit(limit)
     rows = db.execute(stmt).all()
     return [
         {

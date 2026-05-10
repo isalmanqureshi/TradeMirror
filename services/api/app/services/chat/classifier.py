@@ -50,12 +50,7 @@ def classify_intent(message: str) -> IntentClassification:
     normalized = message.lower().strip()
 
     if any(term in normalized for term in RISK_TERMS) and any(term in normalized for term in RISK_DRIFT_TERMS):
-        return IntentClassification(
-            primary_intent="risk_drift",
-            secondary_intents=[],
-            confidence=0.95,
-            reason="matched risk terms with drift/change terms",
-        )
+        return IntentClassification("risk_drift", [], 0.95, "matched risk terms with drift/change terms")
 
     matches: dict[str, list[str]] = {}
     for intent, keywords in INTENT_KEYWORDS.items():
