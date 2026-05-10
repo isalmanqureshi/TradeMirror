@@ -6,6 +6,8 @@ ADVICE_PATTERNS = (
     "should i enter",
     "should i short",
     "what trade should i take",
+    "should i go long",
+    "should i use leverage",
 )
 
 BANNED_PHRASES = (
@@ -15,6 +17,7 @@ BANNED_PHRASES = (
     "enter now",
     "short now",
     "go long",
+    "use leverage",
 )
 
 
@@ -25,8 +28,8 @@ def is_direct_advice_request(message: str) -> bool:
 
 def safe_advice_refusal() -> str:
     return (
-        "I can analyze your historical trading data and risk patterns, but I cannot "
-        "tell you whether to buy, sell, short, enter, exit, or use leverage."
+        "I cannot tell you whether to buy, sell, short, enter, exit, or use leverage. "
+        "I can analyze your historical trades and show whether similar setups in your data tended to win or lose."
     )
 
 

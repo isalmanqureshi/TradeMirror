@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.schemas.chat import ChatFilters, ChatResponse
+from app.schemas.chat import ChatFilters, ChatMetadata, ChatResponse, DataQualityMetadata, EvidenceCountsMetadata
 from app.services.analytics import (
     AnalyticsFilters,
     compare_backtest_live,
@@ -11,39 +11,22 @@ from app.services.analytics import (
     get_risk_drift,
 )
 from app.services.chat.classifier import classify_intent
-from app.services.chat.composer import compose_answer
+from app.services.chat.composer import INTENT_SUGGESTIONS, build_warnings, compose_answer
 from app.services.chat.retrieval import get_best_trades, get_journal_entries, get_recent_trades, get_trade_context_records, get_worst_trades
 from app.services.chat.safety import is_direct_advice_request, safe_advice_refusal
 
 
 def _analytics_filters(user_id, filters: ChatFilters) -> AnalyticsFilters:
-    return AnalyticsFilters(
-        user_id=user_id,
-        strategy_id=filters.strategy_id,
-        source_type=filters.source_type,
-        symbol=filters.symbol,
-        instrument=filters.instrument,
-        start_date=filters.start_date,
-        end_date=filters.end_date,
-    )
+    return AnalyticsFilters(user_id=user_id, strategy_id=filters.strategy_id, source_type=filters.source_type, symbol=filters.symbol, instrument=filters.instrument, start_date=filters.start_date, end_date=filters.end_date)
 
 
 def handle_chat_message(db, user_id, message: str, filters: ChatFilters) -> ChatResponse:
     if is_direct_advice_request(message):
-        return ChatResponse(
-            intent="unknown",
-            secondary_intents=[],
-            answer=safe_advice_refusal(),
-            evidence={"analytics": {}, "trades": [], "journal_entries": [], "trade_context": []},
-            filters=filters,
-            warnings=["direct_trading_advice_refused"],
-            suggested_questions=["How has my risk drift changed in the last 30 trades?"],
-        )
+        return ChatResponse(intent="unknown", secondary_intents=[], answer=safe_advice_refusal(), evidence={"analytics": {}, "trades": [], "journal_entries": [], "trade_context": []}, filters=filters, warnings=["direct_trading_advice_refused"], suggested_questions=INTENT_SUGGESTIONS["performance_summary"], metadata=ChatMetadata(sample_size=0, evidence_counts=EvidenceCountsMetadata(trades=0, journal_entries=0, trade_context=0), data_quality=DataQualityMetadata(has_analytics=False, has_trade_evidence=False, has_journal_evidence=False, has_context_evidence=False)))
 
     classification = classify_intent(message)
     af = _analytics_filters(user_id, filters)
     text = message.lower()
-
     analytics: dict = {}
     trades: list[dict] = []
     journal_entries: list[dict] = []
@@ -61,6 +44,7 @@ def handle_chat_message(db, user_id, message: str, filters: ChatFilters) -> Chat
         elif any(k in text for k in ("news", "macro", "cpi", "fomc", "event")):
             group_by = "macro_event_nearby"
         analytics = get_regime_sensitivity(db, af, group_by)
+        trade_context = get_trade_context_records(db, user_id, af, filters.limit)
     elif classification.primary_intent == "execution_quality":
         group_by = "session_label"
         if any(k in text for k in ("order", "fill")):
@@ -88,13 +72,12 @@ def handle_chat_message(db, user_id, message: str, filters: ChatFilters) -> Chat
     elif classification.primary_intent == "trade_context_lookup":
         trade_context = get_trade_context_records(db, user_id, af, filters.limit)
 
-    answer = compose_answer(classification.primary_intent, analytics, trades, journal_entries, trade_context)
-    return ChatResponse(
-        intent=classification.primary_intent,
-        secondary_intents=classification.secondary_intents,
-        answer=answer,
-        evidence={"analytics": analytics, "trades": trades, "journal_entries": journal_entries, "trade_context": trade_context},
-        filters=filters,
-        warnings=[],
-        suggested_questions=["Which volatility regime hurt me most?", "Is live performance drifting from backtest?"],
+    sample_size = int(analytics.get("sample_size") or len(trades) or len(journal_entries) or len(trade_context))
+    warnings = build_warnings(classification.primary_intent, analytics, journal_entries, trade_context, sample_size)
+    answer = compose_answer(classification.primary_intent, analytics, trades, journal_entries, trade_context, warnings=warnings)
+    metadata = ChatMetadata(
+        sample_size=sample_size,
+        evidence_counts=EvidenceCountsMetadata(trades=len(trades), journal_entries=len(journal_entries), trade_context=len(trade_context)),
+        data_quality=DataQualityMetadata(has_analytics=bool(analytics), has_trade_evidence=bool(trades), has_journal_evidence=bool(journal_entries), has_context_evidence=bool(trade_context)),
     )
+    return ChatResponse(intent=classification.primary_intent, secondary_intents=classification.secondary_intents, answer=answer, evidence={"analytics": analytics, "trades": trades, "journal_entries": journal_entries, "trade_context": trade_context}, filters=filters, warnings=warnings, suggested_questions=INTENT_SUGGESTIONS.get(classification.primary_intent, INTENT_SUGGESTIONS["unknown"]), metadata=metadata)
