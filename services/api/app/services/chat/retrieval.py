@@ -53,24 +53,37 @@ def get_journal_entries(db, user_id, filters: AnalyticsFilters, query: str | Non
         like = f"%{query.lower()}%"
         stmt = stmt.where(or_(JournalEntry.text.ilike(like), JournalEntry.title.ilike(like)))
     stmt = stmt.order_by(JournalEntry.entry_time.desc()).limit(limit)
+
     entries = db.scalars(stmt).all()
-    return [{"journal_entry_id": e.id, "trade_id": e.trade_id, "entry_time": e.entry_time, "title": e.title, "text_excerpt": e.text[:160]} for e in entries]
+    return [
+        {
+            "journal_entry_id": entry.id,
+            "trade_id": entry.trade_id,
+            "entry_time": entry.entry_time,
+            "title": entry.title,
+            "text_excerpt": entry.text[:160],
+        }
+        for entry in entries
+    ]
 
 
 def get_trade_context_records(db, user_id, filters: AnalyticsFilters, limit: int = 10) -> list[dict]:
     stmt = apply_trade_filters(select(Trade), filters).limit(limit)
     trades = db.scalars(stmt).all()
-    out = []
+
+    out: list[dict] = []
     for trade in trades:
         context: TradeContext | None = trade.trade_context
         if context is None:
             continue
-        out.append({
-            "trade_id": trade.id,
-            "trend_regime": context.trend_regime,
-            "volatility_regime": context.volatility_regime,
-            "macro_event_nearby": context.macro_event_nearby,
-            "macro_event_name": context.macro_event_name,
-            "minutes_to_event": context.minutes_to_event,
-        })
+        out.append(
+            {
+                "trade_id": trade.id,
+                "trend_regime": context.trend_regime,
+                "volatility_regime": context.volatility_regime,
+                "macro_event_nearby": context.macro_event_nearby,
+                "macro_event_name": context.macro_event_name,
+                "minutes_to_event": context.minutes_to_event,
+            }
+        )
     return out

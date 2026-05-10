@@ -61,8 +61,11 @@ def _trade(uid: UUID, r: Decimal = Decimal("1.0"), pnl: Decimal = Decimal("100")
     return trade
 
 
-def test_classifier_routes() -> None:
+def test_classifier_routes_performance_phrase() -> None:
     assert classify_intent("How did my NQ strategy perform?").primary_intent == "performance_summary"
+
+
+def test_classifier_routes_other_intents() -> None:
     assert classify_intent("Which volatility regime hurt me most?").primary_intent == "regime_analysis"
     assert classify_intent("Which session has the worst slippage?").primary_intent == "execution_quality"
     assert classify_intent("Is my live trading drifting from the backtest?").primary_intent == "backtest_live_comparison"
@@ -86,18 +89,20 @@ def test_journal_lookup_sample_size_uses_journal_entries() -> None:
         title="Review",
         text="Emotion and mistake notes",
     )
-    db = FakeDB([], [journal, journal, journal, journal, journal])
+    db = FakeDB([], [journal, journal, journal])
     response = handle_chat_message(db, uid, "journal review", ChatFilters())
-    assert "not enough matching trades" not in response.answer.lower()
+    assert "matching journal entries" in response.answer.lower()
+    assert "matching trades" not in response.answer.lower()
 
 
 def test_trade_context_lookup_sample_size_uses_context_records() -> None:
     uid = uuid4()
-    trades = [_trade(uid) for _ in range(5)]
+    trades = [_trade(uid) for _ in range(3)]
     db = FakeDB(trades, [])
     response = handle_chat_message(db, uid, "show context by session", ChatFilters())
     assert response.intent == "trade_context_lookup"
-    assert "not enough matching trades" not in response.answer.lower()
+    assert "matching trade context records" in response.answer.lower()
+    assert "matching trades" not in response.answer.lower()
 
 
 def test_evidence_keys_always_present() -> None:
